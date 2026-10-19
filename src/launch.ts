@@ -1,15 +1,21 @@
-import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import { parseArgs } from '@earendil-works/pi-coding-agent';
 import type { ModelThinkingLevel } from '@earendil-works/pi-ai';
+
 export type Destination = 'tab' | 'right' | 'down';
 export interface LaunchSelection { providerId: string; modelId: string; effort: ModelThinkingLevel | null; destination: Destination }
 export interface LaunchOrigin { workspaceId: string; paneId: string; cwd: string }
 export interface ChildConfiguration { agentDir: string; args: string[] }
 export interface LaunchData { selection: LaunchSelection; origin: LaunchOrigin; child: ChildConfiguration }
+
+const SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 export const quotePosix = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
+export const shellWord = (text: string) => SAFE.test(text) ? text : quotePosix(text);
+export const agentName = () => `pi-${randomBytes(12).toString('hex')}`;
+
 export function childArguments(argv: string[], invocationCwd: string): string[] {
   const parsed = parseArgs(argv);
   if (parsed.apiKey !== undefined) throw new Error('Session-only API keys cannot be reproduced. Configure authentication in Pi first.');
@@ -24,15 +30,39 @@ export function childArguments(argv: string[], invocationCwd: string): string[] 
   }
   return result;
 }
+
 export function validateLaunch(data: LaunchData): void {
   for (const value of [data.selection.providerId, data.selection.modelId, data.origin.workspaceId, data.origin.paneId, data.origin.cwd, data.child.agentDir, ...data.child.args]) {
-    if (!value || value.includes('\0')) throw new Error('Launch identifiers and paths must be nonempty and contain no NUL');
+    if (!value || /[\0\r\n]/.test(value)) throw new Error('Launch identifiers and paths must be nonempty and contain no control characters');
   }
   if (!['tab', 'right', 'down'].includes(data.selection.destination)) throw new Error('Invalid destination');
   if (data.selection.effort !== null && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(data.selection.effort)) throw new Error('Invalid effort');
 }
 
+export const PANE_PLACEHOLDER = 'STEP1_PANE_ID';
+
+/** Exact argv for the two Herdr calls; no shell interpretation. */
+export function launchCommands(data: LaunchData, name: string) {
+  const env = `PI_CODING_AGENT_DIR=${data.child.agentDir}`;
+  const create = data.selection.destination === 'tab'
+    ? ['herdr', 'tab', 'create', '--workspace', data.origin.workspaceId, '--cwd', data.origin.cwd, '--env', env, '--label', name, '--no-focus']
+    : ['herdr', 'pane', 'split', '--pane', data.origin.paneId, '--direction', data.selection.destination, '--cwd', data.origin.cwd, '--env', env, '--no-focus'];
+  const start = ['herdr', 'agent', 'start', name, '--kind', 'pi', '--pane', PANE_PLACEHOLDER, '--', ...data.child.args,
+    '--provider', data.selection.providerId, '--model', data.selection.modelId,
+    ...(data.selection.effort === null ? [] : ['--thinking', data.selection.effort])];
+  return { create, start };
+}
+
 export function renderLaunch(data: LaunchData): string {
   validateLaunch(data);
-  return `\n\nExecute this ready-to-run launch block unchanged after prompt submission. Model selection is complete; no model lookup or command rewriting is needed. Use its returned agentName/paneId to send the surrounding task afterward. On failure inspect the reported state before retrying.\n\n\`\`\`sh\nnode --input-type=module -e ${quotePosix(readFileSync(new URL('./launch-program.mjs', import.meta.url), 'utf8'))} ${quotePosix(JSON.stringify(data))}\n\`\`\`\n\n`;
+  const name = agentName();
+  const { create, start } = launchCommands(data, name);
+  const line = (argv: string[]) => argv.map(shellWord).join(' ');
+  const panePath = data.selection.destination === 'tab' ? '.result.root_pane.pane_id' : '.result.pane.pane_id';
+  const where = data.selection.destination === 'tab' ? `new tab in workspace ${data.origin.workspaceId}` : `split ${data.selection.destination} of pane ${data.origin.paneId}`;
+  return `\n\nLaunch one interactive Pi agent in Herdr with exactly these settings: provider ${data.selection.providerId}, model ${data.selection.modelId}`
+    + `${data.selection.effort === null ? '' : `, thinking ${data.selection.effort}`}, ${where}, cwd ${data.origin.cwd}.\n`
+    + `Run step 1, take the pane ID from ${panePath} in its JSON, then run step 2 with ${PANE_PLACEHOLDER} replaced by that ID. `
+    + 'Use these commands and values unchanged; do not look up models or rewrite flags.\n\n'
+    + "```sh\n" + line(create) + "\n```\n\n```sh\n" + line(start) + "\n```\n\n";
 }
