@@ -1,15 +1,16 @@
 import { Input, SelectList, getKeybindings, matchesKey, truncateToWidth, type Component, type KeybindingsManager } from '@earendil-works/pi-tui';
 import { getSelectListTheme, type Theme, type ExtensionContext } from '@earendil-works/pi-coding-agent';
-import type { LaunchSelection, Destination } from './launch.ts';
+import { AGENT_NAME_PATTERN, type LaunchSelection, type Destination } from './launch.ts';
 import type { ModelChoice } from './models.ts';
 import type { Preferences } from './preferences.ts';
 
 export class Picker implements Component {
   private input = new Input({ prompt: 'Search: ' });
+  private nameInput = new Input({ prompt: 'Agent name (Enter for generated): ' });
   private list!: SelectList;
   private items: {value:string;label:string}[] = [];
   private visible = 8;
-  private step: 'model' | 'effort' | 'destination' = 'model';
+  private step: 'model' | 'effort' | 'destination' | 'name' = 'model';
   private choice?: ModelChoice;
   private effort: LaunchSelection['effort'] = null;
   private modelIndex = 0;
@@ -17,7 +18,7 @@ export class Picker implements Component {
   private message = '';
   private _focused = false;
   get focused() { return this._focused; }
-  set focused(value: boolean) { this._focused = value; this.input.focused = value && this.step === 'model'; }
+  set focused(value: boolean) { this._focused = value; this.input.focused = value && this.step === 'model'; this.nameInput.focused = value && this.step === 'name'; }
   constructor(private choices: ModelChoice[], private prefs: Preferences, private theme: Theme,
     private renderRequest: () => void, private done: (selection: LaunchSelection | undefined) => void,
     private keybindings: Pick<KeybindingsManager, 'matches'> = getKeybindings(), private availableRows: () => number = () => 40) { this.models(); }
@@ -52,15 +53,40 @@ export class Picker implements Component {
       this.message = ''; this.choice = choice; this.effort = choice.initialEffort;
       if (choice.levels.length) this.efforts(); else this.destinations();
     } else if (this.step === 'effort') { this.effort = value as LaunchSelection['effort']; this.destinations(); }
-    else { const model = this.choice!.model; this.done({ providerId:model.provider,modelId:model.id,effort:this.effort,destination:value as Destination }); }
+    else if (this.step === 'destination') { this.destination = value as Destination; this.nameStep(); }
+  }
+  private destination: Destination = 'tab';
+  private nameStep() {
+    this.step = 'name'; this.message = '';
+    this.input.focused = false; this.nameInput.focused = this.focused;
+    this.nameInput.setValue('');
+  }
+  private confirmName() {
+    const typed = this.nameInput.getValue().trim();
+    if (typed && !AGENT_NAME_PATTERN.test(typed)) {
+      this.message = 'Use lowercase a-z, 0-9, _ or -; start with a letter; max 32 characters.';
+      return;
+    }
+    const model = this.choice!.model;
+    this.done({ providerId:model.provider, modelId:model.id, effort:this.effort, destination:this.destination,
+      ...(typed ? { agentName: typed } : {}) });
   }
   private back() {
     this.message = '';
     if (this.step === 'model') this.done(undefined);
+    else if (this.step === 'name') { this.message = ''; this.destinations(); }
     else if (this.step === 'destination' && this.choice!.levels.length) this.efforts();
     else this.models();
   }
   handleInput(data: string) {
+    if (this.step === 'name') {
+      const confirmed = data === '\r' || data === '\n' || this.keybindings.matches(data, 'tui.select.confirm');
+      if (confirmed) this.confirmName();
+      else if (this.keybindings.matches(data, 'tui.select.cancel') || matchesKey(data, 'escape') || matchesKey(data, 'ctrl+c')) this.back();
+      else this.nameInput.handleInput(data);
+      this.renderRequest();
+      return;
+    }
     const selectionAction = (['tui.select.up','tui.select.down','tui.select.confirm','tui.select.pageUp','tui.select.pageDown'] as const).some(action => this.keybindings.matches(data, action));
     if (matchesKey(data, 'escape')) this.back();
     else if (selectionAction) this.list.handleInput(data);
@@ -81,11 +107,16 @@ export class Picker implements Component {
     }
     if (budget < 5) return this.list.render(width).slice(0, budget);
     const identity = this.choice && this.step !== 'model' ? `${this.choice.model.provider} / ${this.choice.model.id}` : '';
+    if (this.step === 'name') {
+      return [this.theme.fg('accent', 'Herdr Pi launch · name'), identity,
+        ...this.nameInput.render(width), this.message, 'Enter confirm (blank = generated name) · Esc back']
+        .filter(Boolean).map(line => truncateToWidth(line, width));
+    }
     return [this.theme.fg('accent', `Herdr Pi launch · ${this.step}`), identity,
       ...(this.step === 'model' ? this.input.render(width) : []), ...this.list.render(width),
       this.message, '↑↓ choose · Enter confirm · Esc back/cancel'].filter(Boolean).map(line => truncateToWidth(line, width));
   }
-  invalidate() { this.input.invalidate(); this.list.invalidate(); }
+  invalidate() { this.input.invalidate(); this.nameInput.invalidate(); this.list.invalidate(); }
 }
 export function pick(ctx: ExtensionContext, choices: ModelChoice[], prefs: Preferences, validate: (selection: LaunchSelection) => Promise<void>): Promise<LaunchSelection | undefined> {
   return ctx.ui.custom((tui,theme,keys,done) => {

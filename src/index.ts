@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from '@earendil-works/pi-coding-agent';
 import { loadModels } from './models.ts';
-import { childArguments, renderLaunch, type LaunchData } from './launch.ts';
+import { childArguments, generatedAgentName, renderLaunch, type LaunchData } from './launch.ts';
 import { loadPreferences, preferencePath, savePreferences } from './preferences.ts';
 import { pick } from './picker.ts';
 export default function(pi: ExtensionAPI) {
@@ -27,7 +27,7 @@ export default function(pi: ExtensionAPI) {
       });
       if (!selection || !data) return;
       if (ctx.ui.getEditorText() !== draft) throw new Error('Draft changed while preparing the command; reopen the picker.');
-      ctx.ui.pasteToEditor(renderLaunch(data));
+      ctx.ui.pasteToEditor(renderLaunch(data, selection.agentName ?? generatedAgentName()));
       try { await savePreferences(path,selection); } catch(error) { ctx.ui.notify(`Launch inserted, but preferences could not be saved: ${String(error)}`, 'warning'); }
     } catch(error) { ctx.ui.notify(String(error), 'error'); }
     finally { active = false; }

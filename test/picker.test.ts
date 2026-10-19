@@ -32,7 +32,9 @@ test('nonreasoning skips effort and completes only on destination confirmation',
  let result:any;const picker=new Picker([choices[1]],prefs,theme,()=>{},value=>result=value);
  picker.handleInput('\r');assert.match(picker.render(80).join(' '),/destination/);assert.equal(result,undefined);
  picker.handleInput('\x1b');assert.match(picker.render(80).join(' '),/model/);
- picker.handleInput('\r');picker.handleInput('\x1b[B');picker.handleInput('\r');assert.equal(result!.destination,'right');assert.equal(result!.effort,null);
+ picker.handleInput('\r');picker.handleInput('\x1b[B');picker.handleInput('\r');
+ assert.match(picker.render(80).join(' '),/name/);assert.equal(result,undefined);
+ picker.handleInput('\r');assert.equal(result!.destination,'right');assert.equal(result!.effort,null);assert.equal(result!.agentName,undefined);
 });
 test('render fits narrow and wide terminal widths after resize',()=>{
  const picker=new Picker(choices,prefs,theme,()=>{},()=>{});
@@ -47,7 +49,7 @@ test('actual Pi Editor bracketed paste preserves Unicode/multiline cursor and si
  const prefix=lines.slice(0,cursor.line).join('\n')+(cursor.line?'\n':'')+lines[cursor.line].slice(0,cursor.col);
  const suffix=lines[cursor.line].slice(cursor.col)+(cursor.line<lines.length-1?'\n'+lines.slice(cursor.line+1).join('\n'):'');
  const data:LaunchData={selection:{providerId:'p',modelId:'m',effort:'high',destination:'tab'},origin:{workspaceId:'w1',paneId:'w1:p1',cwd:'/tmp'},child:{agentDir:'/tmp',args:[]}};
- const block=renderLaunch(data);editor.handleInput('\x1b[200~'+block+'\x1b[201~');
+ const block=renderLaunch(data, 'pi-check');editor.handleInput('\x1b[200~'+block+'\x1b[201~');
  assert.equal(editor.getExpandedText(),prefix+block+suffix);
  editor.handleInput('\x1f');assert.equal(editor.getExpandedText(),before);assert.deepEqual(editor.getCursor(),cursor);
 });
@@ -60,7 +62,7 @@ test('remapped select actions reach the list before the search input',()=>{
   picker.handleInput('\x19');assert.match(picker.render(80).join(' '),/effort/);
   picker.handleInput('\x11');assert.match(picker.render(80).join(' '),/model/);
   picker.handleInput('\x0e');picker.handleInput('\x19');assert.match(picker.render(80).join(' '),/destination/);
-  picker.handleInput('\x19');assert.equal(result.modelId,'plain');
+  picker.handleInput('\x19');assert.match(picker.render(80).join(' '),/name/);picker.handleInput('\x19');assert.equal(result.modelId,'plain');
  }finally{setKeybindings(previous);}
 });
 test('Ctrl+C can be remapped to confirm while Escape deliberately stays back/cancel',()=>{
@@ -71,7 +73,7 @@ test('Ctrl+C can be remapped to confirm while Escape deliberately stays back/can
   let result:any='pending';const picker=new Picker(choices,prefs,theme,()=>{},value=>result=value,keys);
   picker.handleInput('\x03');assert.match(picker.render(80).join(' '),/effort/);
   picker.handleInput('\x1b');assert.match(picker.render(80).join(' '),/Search:/);
-  picker.handleInput('\x03');picker.handleInput('\x03');picker.handleInput('\x03');
+  picker.handleInput('\x03');picker.handleInput('\x03');picker.handleInput('\x03');picker.handleInput('\x03');picker.handleInput('\x03');
   assert.equal(result.modelId,reasoning.id);assert.equal(result.effort,'high');
  }finally{setKeybindings(previous);}
 });
@@ -82,4 +84,24 @@ test('selected row remains visible when terminal height shrinks',()=>{
  for(rows of [40,10,7,4,20]) {
   const lines=picker.render(100);assert.ok(lines.length<=Math.floor(rows*0.9));assert.ok(lines.some(line=>line.includes('→')&&line.includes('model-15')),lines.join('\n'));
  }
+});
+
+test('name step: blank Enter uses generated fallback, custom name is kept, invalid input is refused',()=>{
+ let result:any;const picker=new Picker(choices,prefs,theme,()=>{},value=>result=value);
+ picker.handleInput('\r');            // model
+ picker.handleInput('\r');            // effort
+ picker.handleInput('\r');            // destination (tab)
+ assert.match(picker.render(100).join(' '),/Agent name \(Enter for generated\)/);
+ picker.handleInput('reviewer_1');assert.equal(result,undefined);
+ picker.handleInput('\r');assert.equal(result!.agentName,'reviewer_1');assert.equal(result!.destination,'tab');
+ result=undefined;
+ const second=new Picker(choices,prefs,theme,()=>{},value=>result=value);
+ second.handleInput('\r');second.handleInput('\r');second.handleInput('\r');second.handleInput('\r');
+ assert.ok(result);assert.equal(result.agentName,undefined);
+ result=undefined;
+ const third=new Picker(choices,prefs,theme,()=>{},value=>result=value);
+ third.handleInput('\r');third.handleInput('\r');third.handleInput('\r');
+ third.handleInput('Bad Name!');third.handleInput('\r');
+ assert.equal(result,undefined);assert.match(third.render(100).join(' '),/lowercase/);
+ third.handleInput('\x1b');assert.match(third.render(100).join(' '),/destination/);
 });
