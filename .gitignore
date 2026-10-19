@@ -1,0 +1,10 @@
+node_modules/
+*.tgz
+.unlazy/
+
+# Local implementation and machine-specific audit artifacts
+evidence/
+GATES.md
+PLAN.md
+IMPLEMENTATION_PLAN.md
+test/live-render.ts
