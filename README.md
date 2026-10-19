@@ -47,7 +47,7 @@ Pi 1.3.0 has no named native extension-shortcut setting; the extension registers
 
 ## Launch behavior and limits
 
-The picker captures Pi’s configured model registry and supported effort levels, then inserts a short, ready-to-run block: the exact provider, model, effort, destination, working directory, agent directory and working directory, plus the two Herdr CLI commands to run. Run step 1 (`herdr tab create` or `herdr pane split`), take the returned pane ID, and run step 2 (`herdr agent start`) with it. No model lookup, flag discovery or command construction is left to the agent, and the block stays short instead of embedding a script.
+The picker captures Pi’s configured model registry and supported effort levels, then inserts a short, ready-to-run block: the exact provider, model, effort, destination, working directory, agent directory and working directory, plus the two Herdr CLI commands to run. The agent chooses the new agent’s name (lowercase, unique among live agents); the extension does not invent or hard-code one. Run step 1 (`herdr tab create` or `herdr pane split`), take the returned pane ID, and run step 2 (`herdr agent start`) with it. No model lookup, flag discovery or command construction is left to the agent, and the block stays short instead of embedding a script.
 
 Pi owns authentication, endpoints, headers, sampling, provider fallbacks and extension behavior. The extension makes no guarantee about provider-internal routing or server-side model substitution; the block reports the requested CLI selection.
 

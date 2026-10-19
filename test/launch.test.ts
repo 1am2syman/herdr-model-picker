@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { renderLaunch, launchCommands, childArguments, shellWord, PANE_PLACEHOLDER, type LaunchData } from '../src/launch.ts';
+import { renderLaunch, launchCommands, childArguments, shellWord, PANE_PLACEHOLDER, NAME_PLACEHOLDER, type LaunchData } from '../src/launch.ts';
 
 export function fixture(destination: 'tab' | 'right' | 'down' = 'tab'): LaunchData {
  return {selection:{providerId:"vendor'$(false)",modelId:'org/model; $HOME Unicode π',effort:'high',destination},origin:{workspaceId:'wTest',paneId:'wTest:pSource',cwd:"/tmp/cwd ' π $(false)"},child:{agentDir:"/tmp/agent's π",args:[]}};
@@ -25,17 +25,16 @@ for(const destination of ['tab','right','down'] as const)test('exact Herdr argv 
  const [first, second] = blocks(renderLaunch(data));
  const env = `PI_CODING_AGENT_DIR=${data.child.agentDir}`;
  const firstArgv = argv(first), startArgv = argv(second);
- const name = startArgv[3];
- assert.match(name, /^pi-[a-f0-9]{24}$/);
+ assert.equal(startArgv[3], NAME_PLACEHOLDER);
  const expectedCreate = destination === 'tab'
-  ? ['herdr','tab','create','--workspace','wTest','--cwd',data.origin.cwd,'--env',env,'--label',name,'--no-focus']
+  ? ['herdr','tab','create','--workspace','wTest','--cwd',data.origin.cwd,'--env',env,'--no-focus']
   : ['herdr','pane','split','--pane','wTest:pSource','--direction',destination,'--cwd',data.origin.cwd,'--env',env,'--no-focus'];
  assert.deepEqual(firstArgv, expectedCreate);
- assert.deepEqual(startArgv, ['herdr','agent','start',name,'--kind','pi','--pane',PANE_PLACEHOLDER,'--','--provider',data.selection.providerId,'--model',data.selection.modelId,'--thinking','high']);
+ assert.deepEqual(startArgv, ['herdr','agent','start',NAME_PLACEHOLDER,'--kind','pi','--pane',PANE_PLACEHOLDER,'--','--provider',data.selection.providerId,'--model',data.selection.modelId,'--thinking','high']);
 });
 test('shell-significant identifiers and paths survive quoting exactly',()=>{
  const data = fixture('right');
- const { start } = launchCommands(data, 'pi-abc');
+ const { start } = launchCommands(data);
  const rendered = start.map(shellWord).join(' ');
  assert.deepEqual(argv(rendered), start);
 });

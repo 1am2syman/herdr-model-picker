@@ -1,7 +1,6 @@
 import { join, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { randomBytes } from 'node:crypto';
 import { parseArgs } from '@earendil-works/pi-coding-agent';
 import type { ModelThinkingLevel } from '@earendil-works/pi-ai';
 
@@ -14,7 +13,6 @@ export interface LaunchData { selection: LaunchSelection; origin: LaunchOrigin; 
 const SAFE = /^[A-Za-z0-9_@%+=:,./-]+$/;
 export const quotePosix = (text: string) => `'${text.replaceAll("'", "'\\''")}'`;
 export const shellWord = (text: string) => SAFE.test(text) ? text : quotePosix(text);
-export const agentName = () => `pi-${randomBytes(12).toString('hex')}`;
 
 export function childArguments(argv: string[], invocationCwd: string): string[] {
   const parsed = parseArgs(argv);
@@ -39,15 +37,16 @@ export function validateLaunch(data: LaunchData): void {
   if (data.selection.effort !== null && !['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'].includes(data.selection.effort)) throw new Error('Invalid effort');
 }
 
-export const PANE_PLACEHOLDER = 'STEP1_PANE_ID';
+export const PANE_PLACEHOLDER = 'STEP2_PANE_ID';
+export const NAME_PLACEHOLDER = 'STEP2_AGENT_NAME';
 
 /** Exact argv for the two Herdr calls; no shell interpretation. */
-export function launchCommands(data: LaunchData, name: string) {
+export function launchCommands(data: LaunchData) {
   const env = `PI_CODING_AGENT_DIR=${data.child.agentDir}`;
   const create = data.selection.destination === 'tab'
-    ? ['herdr', 'tab', 'create', '--workspace', data.origin.workspaceId, '--cwd', data.origin.cwd, '--env', env, '--label', name, '--no-focus']
+    ? ['herdr', 'tab', 'create', '--workspace', data.origin.workspaceId, '--cwd', data.origin.cwd, '--env', env, '--no-focus']
     : ['herdr', 'pane', 'split', '--pane', data.origin.paneId, '--direction', data.selection.destination, '--cwd', data.origin.cwd, '--env', env, '--no-focus'];
-  const start = ['herdr', 'agent', 'start', name, '--kind', 'pi', '--pane', PANE_PLACEHOLDER, '--', ...data.child.args,
+  const start = ['herdr', 'agent', 'start', NAME_PLACEHOLDER, '--kind', 'pi', '--pane', PANE_PLACEHOLDER, '--', ...data.child.args,
     '--provider', data.selection.providerId, '--model', data.selection.modelId,
     ...(data.selection.effort === null ? [] : ['--thinking', data.selection.effort])];
   return { create, start };
@@ -55,14 +54,14 @@ export function launchCommands(data: LaunchData, name: string) {
 
 export function renderLaunch(data: LaunchData): string {
   validateLaunch(data);
-  const name = agentName();
-  const { create, start } = launchCommands(data, name);
+  const { create, start } = launchCommands(data);
   const line = (argv: string[]) => argv.map(shellWord).join(' ');
   const panePath = data.selection.destination === 'tab' ? '.result.root_pane.pane_id' : '.result.pane.pane_id';
   const where = data.selection.destination === 'tab' ? `new tab in workspace ${data.origin.workspaceId}` : `split ${data.selection.destination} of pane ${data.origin.paneId}`;
   return `\n\nLaunch one interactive Pi agent in Herdr with exactly these settings: provider ${data.selection.providerId}, model ${data.selection.modelId}`
     + `${data.selection.effort === null ? '' : `, thinking ${data.selection.effort}`}, ${where}, cwd ${data.origin.cwd}.\n`
-    + `Run step 1, take the pane ID from ${panePath} in its JSON, then run step 2 with ${PANE_PLACEHOLDER} replaced by that ID. `
-    + 'Use these commands and values unchanged; do not look up models or rewrite flags.\n\n'
+    + `Run step 1, then run step 2 with ${PANE_PLACEHOLDER} replaced by the pane ID from ${panePath} in step 1's JSON, `
+    + `and ${NAME_PLACEHOLDER} replaced by an agent name you choose: lowercase, matching [a-z][a-z0-9_-]{0,31}, unique among live agents. `
+    + 'Use the remaining commands and values unchanged; do not look up models or rewrite flags.\n\n'
     + "```sh\n" + line(create) + "\n```\n\n```sh\n" + line(start) + "\n```\n\n";
 }
