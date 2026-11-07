@@ -2,7 +2,7 @@
 
 Prepare a new **Pi** agent while composing a prompt in Herdr. Press **Ctrl+Alt+L**, search the configured provider/model list, choose a supported reasoning effort, then choose **New tab**, **Split right**, or **Split down**. The picker inserts a complete executable block at the cursor. Submit your prompt when ready; the current agent executes the block and can send your surrounding task to the returned agent name.
 
-Opening the picker or inserting a block creates no Herdr layout and launches no interactive agent. Esc goes back; Esc on the model list cancels. Pi’s **Ctrl+L** model picker stays available. One editor undo removes the insertion. The `/herdr-model-picker` command is also available; use the shortcut to preserve a draft already being composed.
+The picker is a bordered, shaded panel drawn over the transcript, with the current step in its title and contextual keys in its footer; on terminals too small for a frame it falls back to plain padded lines. Opening the picker or inserting a block creates no Herdr layout and launches no interactive agent. Esc goes back; Esc on the model list cancels. Pi’s **Ctrl+L** model picker stays available. One editor undo removes the insertion. The `/herdr-model-picker` command is also available; use the shortcut to preserve a draft already being composed.
 
 ## Install
 

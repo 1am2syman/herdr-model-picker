@@ -8,7 +8,7 @@ import { effortChoice } from '../src/models.ts';
 import { parsePreferences, modelKey } from '../src/preferences.ts';
 import { renderLaunch, type LaunchData } from '../src/launch.ts';
 initTheme('dark',false);
-const theme={fg:(_color:string,text:string)=>text} as Theme;
+const theme={fg:(_color:string,text:string)=>text,bg:(_color:string,text:string)=>text,bold:(text:string)=>text} as Theme;
 const reasoning=getBuiltinModel('openai','gpt-5.4')!;
 const ordinary={...reasoning,id:'plain',reasoning:false};
 const prefs=parsePreferences('');
@@ -39,6 +39,50 @@ test('nonreasoning skips effort and completes only on destination confirmation',
 test('render fits narrow and wide terminal widths after resize',()=>{
  const picker=new Picker(choices,prefs,theme,()=>{},()=>{});
  for(const width of [12,30,80,120])for(const line of picker.render(width))assert.ok(visibleWidth(line)<=width);
+});
+test('panel covers the full width and stays inside the row budget',()=>{
+ const paint=(code:string)=>(text:string)=>`\u001b[${code}m${text}\u001b[0m`;
+ const ansiTheme={fg:(color:string,text:string)=>paint(color==='border'?'31':color==='accent'?'35':'32')(text),
+   bg:(_color:string,text:string)=>paint('48;5;236')(text),bold:(text:string)=>paint('1')(text)} as Theme;
+ const strip=(line:string)=>line.replace(/\u001b\[[0-9;]*m/g,'');
+  for(const rows of [9,12,40]) for(const width of [34,40,80,120]) {
+  let height=rows;const picker=new Picker(choices,prefs,ansiTheme,()=>{},()=>{},undefined,()=>height);
+  const lines=picker.render(width);
+  assert.ok(lines.length<=Math.floor(rows*0.9),`${lines.length} lines in ${rows} rows`);
+  const framed=width>=34&&Math.floor(rows*0.9)>=9;
+  for(const line of lines){
+   assert.equal(visibleWidth(line),width,'every line fills the panel width');
+   if(!framed) continue;
+   const plain=strip(line);
+   assert.ok(plain.startsWith('╭')||plain.startsWith('│')||plain.startsWith('├')||plain.startsWith('╰'),plain.slice(0,4));
+  }
+  if(!framed) continue;
+  assert.match(strip(lines[0]),/^╭─ .*model.*─╮$/);
+  assert.match(strip(lines.at(-1)!),/^╰─+╯$/);
+ }
+});
+test('search with no match and the name step show their own text',()=>{
+ const picker=new Picker(choices,prefs,theme,()=>{},()=>{});
+ picker.handleInput('zzz');
+ assert.match(picker.render(80).join('\n'),/No models match this search/);
+ picker.handleInput('\x7f');picker.handleInput('\x7f');picker.handleInput('\x7f');
+ picker.handleInput('\r');picker.handleInput('\r');picker.handleInput('\r');
+ const name=picker.render(80).join('\n');
+ assert.match(name,/Agent name \(Enter for generated\)/);
+ assert.match(name,/openai \/ gpt-5\.4 · thinking high · new tab/);
+ assert.doesNotMatch(name,/Split right/,'the launch summary replaces the stale list');
+});
+test('the preparing state is framed and full width too',()=>{
+ const paint=(code:string)=>(text:string)=>`\u001b[${code}m${text}\u001b[0m`;
+ const ansiTheme={fg:(_c:string,text:string)=>paint('32')(text),bg:(_c:string,text:string)=>paint('48;5;236')(text),bold:(text:string)=>paint('1')(text)} as Theme;
+ const picker=new Picker(choices,prefs,ansiTheme,()=>{},()=>{});
+ const lines=picker.renderBusy(80);
+ assert.equal(lines.length,4);
+ for(const line of lines)assert.equal(visibleWidth(line),80);
+ const plain=(line:string)=>line.replace(/\u001b\[[0-9;]*m/g,'');
+ assert.match(plain(lines[0]),/^╭─ Herdr Pi launch/);
+ assert.match(plain(lines.at(-1)!),/^╰─+╯$/);
+ assert.match(plain(lines[2]),/Preparing Pi launch…/);
 });
 test('actual Pi Editor bracketed paste preserves Unicode/multiline cursor and single undo',()=>{
  const tui={requestRender(){},terminal:{columns:100,rows:40}} as unknown as TUI;

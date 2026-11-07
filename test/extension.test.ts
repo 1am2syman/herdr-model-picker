@@ -25,7 +25,7 @@ async function run(exec, steps) {
     modelRegistry:{refresh:async()=>{},getAvailable:()=>[model]},
     ui:{notify:(...args)=>notifications.push(args),getEditorText:()=>'draft π',pasteToEditor:text=>inserted=text,
       custom:async(factory)=>new Promise(resolve=>{
-        const component=factory({requestRender(){},terminal:{rows:40}},{fg:(_c,t)=>t},undefined,resolve);
+        const component=factory({requestRender(){},terminal:{rows:40}},{fg:(_c,t)=>t,bg:(_c,t)=>t,bold:t=>t},undefined,resolve);
         for (const step of steps) { component.handleInput(step); screens.push(component.render(100).join(' ')); }
       })}};
   await handler('',ctx);
