@@ -4,7 +4,7 @@ import { loadModels } from './models.ts';
 import { childArguments, generatedAgentName, renderLaunch, type LaunchData } from './launch.ts';
 import { loadPreferences, preferencePath, savePreferences } from './preferences.ts';
 import { pick } from './picker.ts';
-import { launchOrigin } from './origin.ts';
+import { destinationsFor, resolvePlacement } from './placement.ts';
 export default function(pi: ExtensionAPI) {
   const invocationCwd = process.cwd();
   const agentDir = resolve(invocationCwd, getAgentDir());
@@ -16,10 +16,10 @@ export default function(pi: ExtensionAPI) {
     active = true;
     try {
       const terminalId = process.env.HC_TERMINAL_ID;
-      if (!terminalId) throw new Error('Open Pi in a herdr-core terminal shown in the local Herdr app to prepare a launch.');
-      const layout = await pi.exec('herdr-app', ['ls'], { timeout: 5000 });
-      if (layout.code !== 0 || layout.killed) throw new Error('Cannot reach herdr-app. Install it on this machine, open its window, and retry.');
-      const origin = launchOrigin(JSON.parse(layout.stdout), terminalId, ctx.cwd);
+      if (!terminalId) throw new Error('Open Pi in a herdr-core terminal that Herdr shows, then retry.');
+      const placement = await resolvePlacement((command, args, options) => pi.exec(command, args, options), terminalId);
+      const origin = { terminalId, cwd: ctx.cwd };
+      const destinations = destinationsFor(placement);
       const args = childArguments(process.argv.slice(2), invocationCwd);
       const prefs = loadPreferences(path);
       const choices = await loadModels(ctx,prefs,agentDir);
@@ -27,8 +27,8 @@ export default function(pi: ExtensionAPI) {
       const draft = ctx.ui.getEditorText();
       let data: LaunchData | undefined;
       const selection = await pick(ctx,choices,prefs, async selection => {
-        data = {selection,origin,child:{agentDir,args}};
-      });
+        data = {selection,origin,placement,child:{agentDir,args}};
+      }, destinations);
       if (!selection || !data) return;
       if (ctx.ui.getEditorText() !== draft) throw new Error('Draft changed while preparing the command; reopen the picker.');
       ctx.ui.pasteToEditor(renderLaunch(data, selection.agentName ?? generatedAgentName()));

@@ -21,7 +21,8 @@ export class Picker implements Component {
   set focused(value: boolean) { this._focused = value; this.input.focused = value && this.step === 'model'; this.nameInput.focused = value && this.step === 'name'; }
   constructor(private choices: ModelChoice[], private prefs: Preferences, private theme: Theme,
     private renderRequest: () => void, private done: (selection: LaunchSelection | undefined) => void,
-    private keybindings: Pick<KeybindingsManager, 'matches'> = getKeybindings(), private availableRows: () => number = () => 40) { this.models(); }
+    private keybindings: Pick<KeybindingsManager, 'matches'> = getKeybindings(), private availableRows: () => number = () => 40,
+    private allowed: Destination[] = ['tab', 'right', 'down']) { this.models(); }
   private makeList(items: { value: string; label: string }[], index = 0) {
     this.items = items;
     this.list = new SelectList(items, this.visible, getSelectListTheme());
@@ -43,7 +44,11 @@ export class Picker implements Component {
   }
   private destinations() {
     this.step = 'destination'; this.input.focused = false;
-    this.makeList([{value:'tab',label:'New tab'},{value:'right',label:'Split right'},{value:'down',label:'Split down'}], ['tab','right','down'].indexOf(this.prefs.destination));
+    const labels: Record<Destination, string> = { tab: 'New tab', right: 'Split right', down: 'Split down' };
+    const preferred = this.allowed.includes(this.prefs.destination) ? this.prefs.destination : this.allowed[0] ?? 'tab';
+    this.makeList(this.allowed.map(value => ({ value, label: labels[value] })), Math.max(0, this.allowed.indexOf(preferred)));
+    this.message = this.allowed.includes(this.prefs.destination) ? ''
+      : `Saved destination ${this.prefs.destination} needs herdr-app on this machine; choose another.`;
   }
   private select(value: string) {
     if (this.step === 'model') {
@@ -118,7 +123,7 @@ export class Picker implements Component {
   }
   invalidate() { this.input.invalidate(); this.nameInput.invalidate(); this.list.invalidate(); }
 }
-export function pick(ctx: ExtensionContext, choices: ModelChoice[], prefs: Preferences, validate: (selection: LaunchSelection) => Promise<void>): Promise<LaunchSelection | undefined> {
+export function pick(ctx: ExtensionContext, choices: ModelChoice[], prefs: Preferences, validate: (selection: LaunchSelection) => Promise<void>, allowed: Destination[] = ['tab', 'right', 'down']): Promise<LaunchSelection | undefined> {
   return ctx.ui.custom((tui,theme,keys,done) => {
     let busy = false;
     const picker = new Picker(choices,prefs,theme,() => tui.requestRender(), selection => {
@@ -127,7 +132,7 @@ export function pick(ctx: ExtensionContext, choices: ModelChoice[], prefs: Prefe
       void validate(selection).then(() => done(selection), error => {
         ctx.ui.notify(String(error), 'error'); done(undefined);
       });
-    }, keys, () => tui.terminal.rows);
+    }, keys, () => tui.terminal.rows, allowed);
     return {
       get focused() { return picker.focused; }, set focused(value: boolean) { picker.focused = value; },
       handleInput(data: string) { if (!busy) picker.handleInput(data); },
