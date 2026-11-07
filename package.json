@@ -1,6 +1,6 @@
 {
   "name": "herdr-model-picker",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Prepare exact Pi launches in Herdr from the prompt editor",
   "type": "module",
   "keywords": [
@@ -22,6 +22,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "test": "tsx --test test/*.test.ts",
+    "test:hc": "tsx scripts/smoke-hc.ts --real-pi",
     "verify": "npm run check && npm test && node -e \"console.log('verification passed')\""
   },
   "peerDependencies": {

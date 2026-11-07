@@ -48,7 +48,7 @@ test('actual Pi Editor bracketed paste preserves Unicode/multiline cursor and si
  const cursor=editor.getCursor();const lines=before.split('\n');
  const prefix=lines.slice(0,cursor.line).join('\n')+(cursor.line?'\n':'')+lines[cursor.line].slice(0,cursor.col);
  const suffix=lines[cursor.line].slice(cursor.col)+(cursor.line<lines.length-1?'\n'+lines.slice(cursor.line+1).join('\n'):'');
- const data:LaunchData={selection:{providerId:'p',modelId:'m',effort:'high',destination:'tab'},origin:{workspaceId:'w1',paneId:'w1:p1',cwd:'/tmp'},child:{agentDir:'/tmp',args:[]}};
+ const data:LaunchData={selection:{providerId:'p',modelId:'m',effort:'high',destination:'tab'},origin:{terminalId:'t1',spaceId:'sp1',paneId:'p1',cwd:'/tmp'},child:{agentDir:'/tmp',args:[]}};
  const block=renderLaunch(data, 'pi-check');editor.handleInput('\x1b[200~'+block+'\x1b[201~');
  assert.equal(editor.getExpandedText(),prefix+block+suffix);
  editor.handleInput('\x1f');assert.equal(editor.getExpandedText(),before);assert.deepEqual(editor.getCursor(),cursor);

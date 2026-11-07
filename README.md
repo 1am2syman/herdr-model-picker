@@ -6,7 +6,9 @@ Opening the picker or inserting a block creates no Herdr layout and launches no 
 
 ## Install
 
-Requires Pi **1.3.0**, Herdr **0.9.3**, Node.js **22+**, and a POSIX shell. Both `pi` and `herdr` must be in PATH. Run Pi in a Herdr terminal pane.
+Requires Pi **1.3.0+**, herdr-core **0.1.16+** (`hc`), the new **herdr-app** desktop client, Node.js **22+**, and a POSIX shell. `pi`, `hc`, and `herdr-app` must be in PATH. Run Pi in a **local** terminal pane in an open herdr-app window. The extension resolves `HC_TERMINAL_ID` through `herdr-app ls`.
+
+Version 0.2 replaces the legacy `herdr` 0.9.x integration. SSH panes whose desktop app runs on another machine are not supported: the app CLI must reach the window on the same machine as Pi. Headless hc terminals without an app pane cannot choose tab/split destinations.
 
 ```sh
 pi install git:github.com/1am2syman/herdr-model-picker
@@ -26,7 +28,7 @@ For local development, clone the repository and load its entry point for one inv
 pi -e /absolute/path/to/herdr-model-picker/src/index.ts
 ```
 
-The package declares host libraries as peer dependencies. For development, run `npm install`, then `npm run verify`.
+The package declares host libraries as peer dependencies. For development, run `npm ci`, then `npm run verify`. With `hc` and `pi` installed, `npm run test:hc` also checks startup in a private core, including an interactive Pi launch with no prompt sent. It uses temporary configuration and state and cleans up its own core.
 
 ## Preferences and shortcut
 
@@ -47,13 +49,19 @@ Pi 1.3.0 has no named native extension-shortcut setting; the extension registers
 
 ## Launch behavior and limits
 
-The picker captures Pi’s configured model registry and supported effort levels, then inserts a short, ready-to-run block: the exact provider, model, effort, destination, working directory, agent directory and working directory, plus the two Herdr CLI commands to run. After choosing the destination you can name the agent (lowercase, `[a-z][a-z0-9_-]{0,31}`). Press Enter with the field blank to use a generated `pi-<hex>` name. The chosen name is written into both commands, so the executing agent never has to invent one. Run step 1 (`herdr tab create` or `herdr pane split`), take the returned pane ID, and run step 2 (`herdr agent start`) with it. No model lookup, flag discovery or command construction is left to the agent, and the block stays short instead of embedding a script.
+The picker captures Pi’s configured model registry and supported effort levels, then inserts the exact provider, model, effort, destination, working directory, agent directory, and three commands. After choosing the destination you can name the hc terminal (lowercase, `[a-z][a-z0-9_-]{0,31}`). Press Enter with the field blank to use a generated `pi-<hex>` name.
+
+1. `hc run --bg --json` starts interactive Pi with the chosen name, explicit parent terminal, working directory, agent directory, and Pi arguments. Read `.address` from its JSON.
+2. `herdr-app do pane.focus` selects the captured origin pane, so placement starts in its space and tab.
+3. `herdr-app do terminal.keep` gives the returned terminal address a new tab or a right/down split. Replace only `STEP1_TERMINAL_ADDRESS` in this command with the address returned in step 1.
+
+Run the commands in order and stop on an error. The startup reply confirms a process was created; before sending a task, use `hc wait <address>` and inspect `hc get <address>` / `hc read <address>` for readiness or a trust/authentication dialog. App placement may return `pending`; confirm the terminal appears in `herdr-app ls`. The child outlives its parent, like an independently opened interactive agent.
 
 Pi owns authentication, endpoints, headers, sampling, provider fallbacks and extension behavior. The extension makes no guarantee about provider-internal routing or server-side model substitution; the block reports the requested CLI selection.
 
-Destinations use `--no-focus` and the captured origin pane/workspace, so an unrelated focus change cannot redirect the split. Nothing is created when you open the picker or insert the block. If creation or startup fails, inspect Herdr’s live state before retrying; nothing is retried or closed automatically.
+Placement follows herdr-app’s native behavior and **focuses the new child**. The new app has no `--no-focus` option. Step 2 selects the captured origin explicitly; avoid changing focus between steps 2 and 3 because `terminal.keep` uses the current pane. Nothing is created when you open the picker or insert the block. If startup or placement fails, inspect `hc get <name>` and `herdr-app ls` before retrying. A successfully started terminal can remain running without a pane after a placement failure; reuse its address rather than rerunning step 1. Nothing is retried or closed automatically.
 
-The effective Pi agent directory, explicit local extension paths, extension-discovery flag and project-trust override are carried into the child. Paths expand home references and file URLs and resolve against the parent’s original invocation directory. Other parent flags, prompts, resume and print/RPC settings are omitted. Session-only state is not copied: configure custom providers/authentication persistently or through an inherited explicit extension. Environment credentials must be available in Herdr-created shell panes. Runtime `--api-key` overrides are rejected so secrets never enter the draft. Explicit npm/git/URL extension references must be installed persistently first.
+The effective Pi agent directory, explicit local extension paths, extension-discovery flag and project-trust override are carried into the child. Paths expand home references and file URLs and resolve against the parent’s original invocation directory. Other parent flags, prompts, resume and print/RPC settings are omitted. Session-only state is not copied: configure custom providers/authentication persistently or through an inherited explicit extension. Environment credentials must be available to programs launched by the core; hc does not copy arbitrary environment variables from the calling Pi process. Runtime `--api-key` overrides are rejected so secrets never enter the draft. Explicit npm/git/URL extension references must be installed persistently first.
 
-Models registered only in the parent process may be unavailable in a child; Pi reports resolution errors. Argument arrays and POSIX quoting preserve shell-significant identifiers and paths. The picker is terminal-UI-only. The inserted instruction asks the current agent to use the block unchanged; actual compliance is observed in tests, not guaranteed by the prompt. See [verification summary](VERIFICATION.md).
+Models registered only in the parent process may be unavailable in a child; Pi reports resolution errors. Argument arrays and POSIX quoting preserve shell-significant identifiers and paths. The picker is terminal-UI-only. The inserted instruction asks the current agent to use the block unchanged; compliance is not enforced by the extension. See [verification summary](VERIFICATION.md).
 

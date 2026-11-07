@@ -1,13 +1,18 @@
 # Verification
 
-Tested with Pi 1.3.0, Herdr 0.9.3 and Node 26.7.0 on Linux. Node 22 is declared as the minimum but was not separately exercised.
+The 0.2 integration targets herdr-core (`hc`) and herdr-app. Results for legacy Herdr 0.9.x do not establish compatibility with these APIs.
 
-- Type checking and all 27 automated tests pass: `npm run verify`.
-- Independent Sol 6.1 review at high effort reported no remaining actionable code findings for the registry-to-CLI forwarding contract.
-- Final code was exercised in disposable live Herdr tabs and panes: picker search/effort/destination, back/cancel, multiline Unicode cursor insertion, single undo, normal Ctrl+L, remembered destinations, narrow/short terminal state, and directional navigation.
-- The block is two exact Herdr commands (about 800 characters) carrying the chosen or generated agent name rather than an embedded Node program; a live tab launch from the rendered commands produced an interactive Sol/high child with focus untouched, and was cleaned up.
-- Earlier real parent submissions launched children in a new tab, right split and down split with the block executed unchanged. No task was sent to child agents. All test resources were cleaned up.
+## Automated checks
 
-A new-tab snapshot showed the child focused after launch; causality was not isolated. Both split layouts retained parent focus. Physical desktop keyboard routing and screenshot-based visual verification remain unproven. Live nonreasoning navigation and the complete two-provider persistence matrix were not exercised.
+- `npm run verify`: TypeScript checking and the behavior suite. Coverage includes caller-terminal origin discovery independent of UI focus; rejection of missing, ambiguous, remote and malformed layouts; unchanged drafts when the app is unavailable; exact launch arguments for tab/right/down; POSIX quoting; thinking defaults; preferences; picker navigation; and editor insertion/undo.
+- `npm run test:hc`: real hc 0.1.16 in a private session with a private socket and temporary XDG config/state. A fixture executable verifies the generated startup arguments, working directory, agent directory, terminal name and parent for all destinations, including Unicode and shell metacharacters. An `env` template is installed to verify it cannot override the explicit `/usr/bin/env` executable.
+- The same smoke test starts real interactive Pi 1.5.0 with `openai/gpt-5.4`, thinking `high`, a temporary agent directory, extension discovery disabled, and this repository's extension explicitly loaded with `-e`. It waits for hc's `idle` report, checks the screen for extension loading errors, confirms the child stays live after its parent exits, and cleans up. No task or provider request is sent.
+- Development type checking and UI tests use the pinned Pi 1.3.0 libraries. Node 26.7.0 was used on Linux; the declared Node 22 minimum was not separately exercised.
 
-The extension forwards selected provider/model/effort CLI values. Pi owns authentication, provider routing, fallback, sampling and extension behavior. Readiness means Herdr reports the interactive Pi agent ready; it does not verify a provider’s eventual wire request.
+## App contract and limits
+
+The command shapes and layout decoder were checked against the upstream [app manual](https://github.com/herdrdev/herdr-app/blob/e5ba294ac187aa12d6f7e72ebfb59eb4ebeabd65/src/SKILL.md), [command registry](https://github.com/herdrdev/herdr-app/blob/e5ba294ac187aa12d6f7e72ebfb59eb4ebeabd65/src/commands.rs), and [window implementation](https://github.com/herdrdev/herdr-app/blob/e5ba294ac187aa12d6f7e72ebfb59eb4ebeabd65/src/window.rs). The parser consumes `spaces[].tabs[].terminals[]`; placement uses `pane.focus` then `terminal.keep`. The latter uses current focus, can return `pending`, and focuses the child on completion. No unsupported `--no-focus` flag is emitted.
+
+This headless VPS has hc but no herdr-app executable or desktop window. Actual app placement, physical keyboard routing and visual behavior were not exercised. App layout responses are fixtures in automated tests. Support is limited to Pi and the app CLI on the same machine; SSH panes with the app on another machine are rejected.
+
+The extension forwards selected provider/model/effort values. Pi owns authentication, provider routing, fallback, sampling and extension behavior. An `idle` report proves interactive startup, not an eventual provider wire request. The prompt asks the executing agent to follow the commands; it cannot enforce compliance. Focus changes between the focus and placement commands can change the destination.

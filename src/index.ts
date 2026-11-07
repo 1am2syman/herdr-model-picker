@@ -4,6 +4,7 @@ import { loadModels } from './models.ts';
 import { childArguments, generatedAgentName, renderLaunch, type LaunchData } from './launch.ts';
 import { loadPreferences, preferencePath, savePreferences } from './preferences.ts';
 import { pick } from './picker.ts';
+import { launchOrigin } from './origin.ts';
 export default function(pi: ExtensionAPI) {
   const invocationCwd = process.cwd();
   const agentDir = resolve(invocationCwd, getAgentDir());
@@ -14,8 +15,11 @@ export default function(pi: ExtensionAPI) {
     if (active) return;
     active = true;
     try {
-      if (process.env.HERDR_ENV !== '1' || !process.env.HERDR_WORKSPACE_ID || !process.env.HERDR_PANE_ID) throw new Error('Open Pi in a Herdr pane to prepare a launch.');
-      const origin = {workspaceId:process.env.HERDR_WORKSPACE_ID,paneId:process.env.HERDR_PANE_ID,cwd:ctx.cwd};
+      const terminalId = process.env.HC_TERMINAL_ID;
+      if (!terminalId) throw new Error('Open Pi in a herdr-core terminal shown in the local Herdr app to prepare a launch.');
+      const layout = await pi.exec('herdr-app', ['ls'], { timeout: 5000 });
+      if (layout.code !== 0 || layout.killed) throw new Error('Cannot reach herdr-app. Install it on this machine, open its window, and retry.');
+      const origin = launchOrigin(JSON.parse(layout.stdout), terminalId, ctx.cwd);
       const args = childArguments(process.argv.slice(2), invocationCwd);
       const prefs = loadPreferences(path);
       const choices = await loadModels(ctx,prefs,agentDir);
